@@ -23,11 +23,11 @@ import sqlalchemy.sql
 app = flask.Flask(__name__)
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["THEMANMACHINE_DB_URL"]
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
 slack_events_adapter = SlackEventAdapter(
-    os.environ.get("THEMANMACHINE_SLACK_SIGNING_SECRET"), "/slack/events", app
+    os.environ.get("SLACK_SIGNING_SECRET"), "/slack/events", app
 )
-client = WebClient(os.environ.get("THEMANMACHINE_SLACK_OATH_TOKEN"))
+client = WebClient(os.environ.get("SLACK_OATH_TOKEN"))
 
 # Database Stuff
 
