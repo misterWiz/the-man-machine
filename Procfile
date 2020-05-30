@@ -1,1 +1,1 @@
-web: gunicorn themanmachine:themanmachine
+web: gunicorn themanmachine.themanmachine:app
