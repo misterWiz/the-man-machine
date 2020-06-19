@@ -69,19 +69,34 @@ MAX_CHANNEL_NAME_LENGTH = 80
 MAX_CHANNEL_TOPIC_LENGTH = 250
 
 
-def invite_all(channel):
+def depaginate(call, member):
+    response = call()
+    result = response[member]
+    next_cursor = response["response_metadata"].get("next_cursor")
+    while next_cursor:
+        response = call()
+        result += response[member]
+        next_cursor = response["response_metadata"].get("next_cursor")
+    return result
+
+
+def invite_all(channel_id):
     try:
-        all_users = client.users_list()["members"]
-        users_already_in = client.conversations_members(channel=channel)["members"]
-        # TODO: Handle pagination
+        client.conversations_join(channel=channel_id)
+        all_users = depaginate(client.users_list, "members")
+        users_already_in = depaginate(
+            lambda: client.conversations_members(channel=channel_id), "members"
+        )
         active_user_ids = [user["id"] for user in all_users if not user["deleted"]]
-        already_in_ids = [user["id"] for user in users_already_in]
-        inviteable_ids = [id for id in active_user_ids if id not in already_in_ids]
+        # already_in_ids = [user["id"] for user in users_already_in]
+        inviteable_ids = [id for id in active_user_ids if id not in users_already_in]
         # TODO: Probably need to make sure bot is in channel before inviting others
         # TODO: Probably need to remove bot from invite list
-        client.conversations_invite(channel=channel, users=inviteable_ids)
+        client.conversations_invite(channel=channel_id, users=inviteable_ids)
+        return True
     except SlackApiError as err:
         logging.error(err)
+        return err
         pass  # TODO: something more
 
 
@@ -167,6 +182,23 @@ def slash_submissions():
         response = flask.make_response("", 200)
 
     return response
+
+
+@app.route("/slack/command/inviteall", methods=["POST"])
+def slack_inviteall():
+    """Invite all users to the current channel"""
+    ts = flask.request.headers.get("X-Slack-Request-Timestamp")
+    sig = flask.request.headers.get("X-Slack-Signature")
+    if not slack_events_adapter.server.verify_signature(ts, sig):
+        logging.warn(f"Invalid message sent to /submissions: ts={ts}, sig={sig}")
+        flask.abort(400)
+    channel_id = flask.request.form["channel_id"]
+    response = invite_all(channel_id)
+    if response is True:
+        retval = flask.make_response("", http.HTTPStatus.OK)
+    else:
+        retval = flask.make_response(response, http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    return retval
 
 
 def make_slash_submission_list_response(args, __):
